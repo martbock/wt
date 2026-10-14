@@ -152,7 +152,7 @@ func (m model) prNote() string {
 }
 
 func (m model) viewLinks(b *strings.Builder) {
-	fmt.Fprintf(b, "%s  %s\n\n", titleStyle.Render("wt · "+m.opts.Repo+" · shared files"), dimStyle.Render("wt.links"))
+	fmt.Fprintf(b, "%s  %s\n\n", titleStyle.Render("wt · "+m.opts.Repo+" · shared files"), dimStyle.Render("wt.yml"))
 
 	if len(m.links) == 0 {
 		b.WriteString(dimStyle.Render("  Nothing is shared between worktrees. Press a to add a path.") + "\n")

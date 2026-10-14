@@ -8,10 +8,10 @@ func newLinkCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "link",
 		Short: "Show or change which files worktrees share with main/",
-		Long: `Worktrees symlink the paths listed in wt.links back to main/, so a gitignored file such as
+		Long: `Worktrees symlink the paths listed under links in wt.yml back to main/, so a gitignored file such as
 config/local.yaml exists once and is edited everywhere. Nothing is listed by default.
 
-add and rm update wt.links and apply the change to every existing worktree, not only to new
+add and rm update wt.yml and apply the change to every existing worktree, not only to new
 ones. Paths are relative to main/; globs are allowed and a trailing / marks a directory.`,
 		Example: `  wt link ls
   wt link add 'config/local*.yaml' .env
@@ -52,7 +52,7 @@ func newLinkAddCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "add <path>...",
 		Short: "Share paths with every worktree, existing ones included",
-		Long: `Add paths (relative to main/, globs allowed, trailing / for a directory) to wt.links and symlink
+		Long: `Add paths (relative to main/, globs allowed, trailing / for a directory) to the links in wt.yml and symlink
 them into every existing worktree. A path that is already listed is applied again, which repairs
 worktrees that lack the link. A file that a worktree already has is left alone.`,
 		Args: cobra.MinimumNArgs(1),
@@ -75,7 +75,7 @@ func newLinkRmCmd() *cobra.Command {
 		Use:     "rm <path>...",
 		Aliases: []string{"remove"},
 		Short:   "Stop sharing paths: unlink them from every worktree",
-		Long: `Remove paths from wt.links and delete their symlinks from every existing worktree. The files in
+		Long: `Remove paths from the links in wt.yml and delete their symlinks from every existing worktree. The files in
 main/ stay, and so does anything in a worktree that is not a link into main/. A path must be
 listed (see 'wt link ls'); if one is not, nothing is changed.`,
 		Args: cobra.MinimumNArgs(1),
@@ -96,8 +96,8 @@ listed (see 'wt link ls'); if one is not, nothing is changed.`,
 func newLinkSyncCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "sync",
-		Short: "Apply wt.links to every existing worktree (after editing the file by hand)",
-		Long: `Symlink everything wt.links lists into every existing worktree. It only adds links; to stop
+		Short: "Apply the links in wt.yml to every existing worktree (after editing the file by hand)",
+		Long: `Symlink everything the links in wt.yml list into every existing worktree. It only adds links; to stop
 sharing a path use 'wt link rm'.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {

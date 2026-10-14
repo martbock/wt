@@ -23,7 +23,7 @@ func newCloneCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "clone <url> [<directory>]",
 		Short: "Clone a repository into <directory>/main and set it up for worktrees",
-		Long: `Clone a repository into <directory>/main, write wt.links, name the IDE project and install a
+		Long: `Clone a repository into <directory>/main, write wt.yml, name the IDE project and install a
 pre-commit hook that refuses commits in main/. Like git clone, <directory> is relative to the
 current directory and defaults to the repository name.
 
@@ -56,7 +56,7 @@ have to be recreated by hand.`,
 	}
 
 	cmd.Flags().StringArrayVar(&linkPaths, "link", nil, "path in main/ to symlink into every worktree (repeatable; default: none)")
-	cmd.Flags().StringVar(&ideName, "ide", "", "IDE for this repository: "+strings.Join(ide.Names(), ", ")+", or a macOS app name (default: $"+ide.AppEnv+" or goland)")
+	cmd.Flags().StringVar(&ideName, "ide", "", "IDE for this repository: "+strings.Join(ide.Names(), ", ")+", or a macOS app name (default: $"+ide.AppEnv+", the global IDE or goland)")
 	cmd.Flags().StringVar(&seed, "seed", "", "existing clone to copy the --link paths from")
 
 	return cmd
@@ -89,7 +89,7 @@ func newNewCmd() *cobra.Command {
 		Use:   "new [slug]",
 		Short: "Create a worktree named <slug> on a new or existing branch, e.g. 'wt new fix-login-bug'",
 		Long: `Create a worktree at <container>/worktrees/<slug> on a new branch <slug>, cut from origin's
-default branch. Paths listed in wt.links (see 'wt link') are symlinked in from main/.
+default branch. Paths listed under links in wt.yml (see 'wt link') are symlinked in from main/.
 
 --prefix goes in front of the branch name, not the directory. It is used as typed, except that a
 bare ticket ID gets its dash:

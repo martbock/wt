@@ -15,7 +15,8 @@ func newIDECmd() *cobra.Command {
 		Use:   "ide",
 		Short: "Show or change the IDE that 'wt open' uses for this repository",
 		Long: `Each repository has its own IDE, so Go repositories can open in GoLand and Node ones in VS Code.
-It is stored in wt.conf next to wt.links. Without a setting, $` + ide.AppEnv + ` applies, then GoLand.
+It is stored in wt.yml next to main/. Without a setting, $` + ide.AppEnv + ` applies, then the
+global one ('wt global set ide <ide>'), then GoLand.
 
 Presets: ` + strings.Join(ide.Names(), ", ") + `. Any other value is taken as a macOS application name,
 as in 'open -a <name>'.
@@ -74,7 +75,7 @@ Worktrees that already exist keep the project name they have; nothing is moved o
 func newIDEUnsetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "unset",
-		Short: "Remove this repository's IDE setting, falling back to $" + ide.AppEnv + " or GoLand",
+		Short: "Remove this repository's IDE setting, falling back to $" + ide.AppEnv + ", the global IDE or GoLand",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			m, err := managerHere(cmd)

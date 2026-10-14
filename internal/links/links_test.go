@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/martbock/wt/internal/config"
 	"github.com/martbock/wt/internal/links"
 )
 
@@ -28,41 +29,67 @@ func statuses(actions []links.Action) map[string]links.Status {
 	return out
 }
 
-func TestParse(t *testing.T) {
-	entries, err := links.Parse(strings.NewReader("# comment\n\nconfig/local*.yaml\n  .env  \n.idea/runConfigurations/\n"))
+func TestLoad(t *testing.T) {
+	dir := container(t, "# comment\nlinks:\n  - config/local*.yaml\n  - '  .env  '\n  - .idea/runConfigurations/\n")
+
+	got, err := links.Load(dir)
 
 	require.NoError(t, err)
 	assert.Equal(t, []links.Entry{
 		{Pattern: "config/local*.yaml"},
 		{Pattern: ".env"},
 		{Pattern: ".idea/runConfigurations", Dir: true},
-	}, entries)
+	}, got)
 }
 
-func TestParse_RejectsPathsOutsideMain(t *testing.T) {
+func TestLoad_NothingListedMeansNothingLinked(t *testing.T) {
+	for name, content := range map[string]string{
+		"no file":     "",
+		"no list":     "ide: vscode\n",
+		"empty list":  "links: []\n",
+		"null list":   "links:\n",
+		"the default": config.Template,
+	} {
+		got, err := links.Load(container(t, content))
+
+		require.NoError(t, err, name)
+		assert.Empty(t, got, name)
+	}
+}
+
+func TestLoad_RejectsBadFiles(t *testing.T) {
+	for name, content := range map[string]string{
+		"not a list":      "links: .env\n",
+		"not yaml":        "links: [\n",
+		"outside main":    "links:\n  - ../secrets\n",
+		"absolute":        "links:\n  - /etc/passwd\n",
+		"all of main":     "links:\n  - .\n",
+		"bad glob":        "links:\n  - config/[\n",
+		"empty item":      "links:\n  - ''\n",
+		"nested sequence": "links:\n  - [a]\n",
+	} {
+		_, err := links.Load(container(t, content))
+		assert.Error(t, err, name)
+	}
+}
+
+func TestParseEntry_RejectsPathsOutsideMain(t *testing.T) {
 	for _, line := range []string{"/etc/passwd", "../secrets", ".."} {
-		_, err := links.Parse(strings.NewReader(line))
+		_, err := links.ParseEntry(line)
 		assert.Error(t, err, line)
 	}
 }
 
-func TestParse_RejectsPathsThatWouldLinkAllOfMain(t *testing.T) {
+func TestParseEntry_RejectsPathsThatWouldLinkAllOfMain(t *testing.T) {
 	for _, line := range []string{".", "./", "a/.."} {
-		_, err := links.Parse(strings.NewReader(line))
+		_, err := links.ParseEntry(line)
 		assert.Error(t, err, line)
 	}
 }
 
-func TestParse_RejectsBadGlob(t *testing.T) {
+func TestParseEntry_RejectsBadGlob(t *testing.T) {
 	_, err := links.ParseEntry("config/[")
 	assert.Error(t, err)
-}
-
-func TestParse_DefaultLinksNothing(t *testing.T) {
-	entries, err := links.Parse(strings.NewReader(links.Default))
-
-	require.NoError(t, err)
-	assert.Empty(t, entries, "no repository shares files unless it opts in")
 }
 
 func TestEntry_String(t *testing.T) {
@@ -152,7 +179,7 @@ func container(t *testing.T, content string) string {
 
 	dir := t.TempDir()
 	if content != "" {
-		write(t, filepath.Join(dir, "wt.links"), content)
+		write(t, filepath.Join(dir, "wt.yml"), content)
 	}
 
 	return dir
@@ -167,49 +194,77 @@ func entries(t *testing.T, paths ...string) []links.Entry {
 	return e
 }
 
-func TestAddToFile_CreatesFromDefault(t *testing.T) {
+func readConfig(t *testing.T, dir string) string {
+	t.Helper()
+
+	raw, err := os.ReadFile(filepath.Join(dir, "wt.yml"))
+	require.NoError(t, err)
+
+	return string(raw)
+}
+
+func TestAddToFile_CreatesFromTemplate(t *testing.T) {
 	dir := container(t, "")
 
 	added, err := links.AddToFile(dir, entries(t, ".env", ".idea/runConfigurations/"))
 	require.NoError(t, err)
 	assert.Len(t, added, 2)
 
-	raw, err := os.ReadFile(filepath.Join(dir, "wt.links"))
-	require.NoError(t, err)
-	assert.True(t, strings.HasPrefix(string(raw), links.Default), "the explanatory comments come along")
-	assert.True(t, strings.HasSuffix(string(raw), "\n.env\n.idea/runConfigurations/\n"), string(raw))
+	raw := readConfig(t, dir)
+	assert.True(t, strings.HasPrefix(raw, config.Template), "the explanatory comments come along")
+	assert.True(t, strings.HasSuffix(raw, "\nlinks:\n  - .env\n  - .idea/runConfigurations/\n"), raw)
 }
 
-func TestAddToFile_KeepsExistingLinesAndSkipsListed(t *testing.T) {
-	dir := container(t, "# mine\n.env\nconfig/local*.yaml")
+func TestAddToFile_KeepsExistingItemsAndSkipsListed(t *testing.T) {
+	dir := container(t, "# mine\n\nide: vscode # not goland\nlinks:\n  # secrets\n  - .env\n  - config/local*.yaml\n")
 
 	added, err := links.AddToFile(dir, entries(t, ".env", "docker/", "docker"))
 	require.NoError(t, err)
 	assert.Equal(t, entries(t, "docker/"), added, "listed paths and duplicates are not added again")
 
-	raw, err := os.ReadFile(filepath.Join(dir, "wt.links"))
-	require.NoError(t, err)
-	assert.Equal(t, "# mine\n.env\nconfig/local*.yaml\ndocker/\n", string(raw))
+	assert.Equal(t, "# mine\n\nide: vscode # not goland\nlinks:\n  # secrets\n  - .env\n  - config/local*.yaml\n  - docker/\n", readConfig(t, dir))
 
 	added, err = links.AddToFile(dir, entries(t, "docker"))
 	require.NoError(t, err)
 	assert.Empty(t, added)
 }
 
+func TestAddToFile_QuotesWhatYAMLWouldMisread(t *testing.T) {
+	dir := container(t, "")
+
+	_, err := links.AddToFile(dir, entries(t, "*.local", "!important", "a: b", "#hash"))
+	require.NoError(t, err)
+
+	got, err := links.Load(dir)
+	require.NoError(t, err)
+	assert.Equal(t, entries(t, "*.local", "!important", "a: b", "#hash"), got)
+}
+
 func TestRemoveFromFile(t *testing.T) {
-	dir := container(t, "# keep me\n.env\n\n  config/local*.yaml  \n.idea/runConfigurations/\n")
+	dir := container(t, "# keep me\n\nlinks:\n  - .env # secrets\n  - '  config/local*.yaml  '\n  - .idea/runConfigurations/\n")
 
 	removed, err := links.RemoveFromFile(dir, entries(t, "config/local*.yaml", ".idea/runConfigurations"))
 	require.NoError(t, err)
 	assert.Equal(t, entries(t, "config/local*.yaml", ".idea/runConfigurations/"), removed, "as they were listed")
 
-	raw, err := os.ReadFile(filepath.Join(dir, "wt.links"))
+	assert.Equal(t, "# keep me\n\nlinks:\n  - .env # secrets\n", readConfig(t, dir))
+}
+
+func TestRemoveFromFile_RemovingTheLastOneKeepsTheRest(t *testing.T) {
+	dir := container(t, "# keep me\n\nide: vscode\nlinks:\n  - .env\n")
+
+	_, err := links.RemoveFromFile(dir, entries(t, ".env"))
 	require.NoError(t, err)
-	assert.Equal(t, "# keep me\n.env\n\n", string(raw))
+	assert.Equal(t, "# keep me\n\nide: vscode\n", readConfig(t, dir))
+
+	dir = container(t, "links:\n  - .env\n")
+	_, err = links.RemoveFromFile(dir, entries(t, ".env"))
+	require.NoError(t, err)
+	assert.Equal(t, "", readConfig(t, dir), "wt.yml stays, it is what marks the repository as managed")
 }
 
 func TestRemoveFromFile_ChangesNothingIfAnyPathIsNotListed(t *testing.T) {
-	const content = ".env\nconfig/local.yaml\n"
+	const content = "links:\n  - .env\n  - config/local.yaml\n"
 	dir := container(t, content)
 
 	_, err := links.RemoveFromFile(dir, entries(t, ".env", "typo.yaml"))
@@ -217,13 +272,10 @@ func TestRemoveFromFile_ChangesNothingIfAnyPathIsNotListed(t *testing.T) {
 	var notListed *links.NotListedError
 	require.ErrorAs(t, err, &notListed)
 	assert.Equal(t, []string{"typo.yaml"}, notListed.Patterns)
-
-	raw, err := os.ReadFile(filepath.Join(dir, "wt.links"))
-	require.NoError(t, err)
-	assert.Equal(t, content, string(raw))
+	assert.Equal(t, content, readConfig(t, dir))
 
 	_, err = links.RemoveFromFile(container(t, ""), entries(t, ".env"))
-	assert.Error(t, err, "no wt.links means nothing is listed")
+	assert.Error(t, err, "no wt.yml means nothing is listed")
 }
 
 func TestUnlink(t *testing.T) {

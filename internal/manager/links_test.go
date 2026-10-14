@@ -87,9 +87,9 @@ func TestAddLinks_LinksIntoExistingWorktrees(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, isLink(t, filepath.Join(third.Path, "config", "local.yaml")))
 
-	raw, err := os.ReadFile(filepath.Join(m.Layout.Container, "wt.links"))
+	raw, err := os.ReadFile(filepath.Join(m.Layout.Container, "wt.yml"))
 	require.NoError(t, err)
-	assert.Contains(t, string(raw), "config/local*.yaml\n")
+	assert.Contains(t, string(raw), "links:\n  - config/local*.yaml\n")
 }
 
 func TestAddLinks_DirectoryIsSharedBothWays(t *testing.T) {
@@ -201,7 +201,7 @@ func TestSyncLinks_PicksUpHandEditedFile(t *testing.T) {
 	wt, err := m.Create(t.Context(), manager.CreateOptions{Slug: "task"})
 	require.NoError(t, err)
 
-	write(t, filepath.Join(m.Layout.Container, "wt.links"), "# edited by hand\nconfig/local.yaml\n")
+	write(t, filepath.Join(m.Layout.Container, "wt.yml"), "# edited by hand\nlinks:\n  - config/local.yaml\n")
 
 	change, err := m.SyncLinks(t.Context())
 	require.NoError(t, err)

@@ -25,8 +25,8 @@ branch and Claude Code session.
 
   <repo>/main/                        the clone; never edited
   <repo>/worktrees/<slug>/
-  <repo>/wt.links                     gitignored paths symlinked from main/ into each worktree (none by default)
-  <repo>/wt.conf                      per-repository settings, e.g. the IDE
+  <repo>/wt.yml                       per-repository settings: the IDE, and the gitignored paths
+                                      symlinked from main/ into each worktree (none by default)
 
 Run 'wt ui' for an interactive list of worktrees.`,
 		SilenceUsage:  true,
@@ -38,6 +38,7 @@ Run 'wt ui' for an interactive list of worktrees.`,
 		newInitCmd(),
 		newLinkCmd(),
 		newIDECmd(),
+		newGlobalCmd(),
 		newUICmd(),
 		newNewCmd(),
 		newListCmd(),

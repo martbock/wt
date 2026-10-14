@@ -540,11 +540,11 @@ func (m model) onLinksKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.status = ""
 		}
 	case "s":
-		m.busy = "Linking everything in wt.links into every worktree…"
+		m.busy = "Linking everything in wt.yml into every worktree…"
 
 		return m, func() tea.Msg {
 			c, err := m.be.SyncLinks(m.ctx)
-			return linkChangedMsg{summary: summarize("Synced wt.links", c), err: err}
+			return linkChangedMsg{summary: summarize("Synced wt.yml links", c), err: err}
 		}
 	}
 
@@ -614,7 +614,7 @@ func (m *model) fail(err error) {
 	m.status, m.statusErr = err.Error(), true
 }
 
-// summarize says what a wt.links change did across the worktrees, in one line.
+// summarize says what a change to the links in wt.yml did across the worktrees, in one line.
 func summarize(what string, c manager.LinkChange) string {
 	var linked, unlinked, skipped int
 	var missing bool

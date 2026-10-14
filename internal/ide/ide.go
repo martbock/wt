@@ -13,13 +13,13 @@ import (
 // NameFile is the file JetBrains IDEs read the project name from.
 const NameFile = ".idea/.name"
 
-// AppEnv names the IDE (a preset or a macOS application) to use in repositories whose wt.conf
+// AppEnv names the IDE (a preset or a macOS application) to use in repositories whose wt.yml
 // does not choose one.
 const AppEnv = "WT_IDE_APP"
 
 // IDE is an editor that worktrees can be opened in.
 type IDE struct {
-	// Name is the short name used in wt.conf and on the command line, e.g. "vscode".
+	// Name is the short name used in wt.yml and on the command line, e.g. "vscode".
 	Name string
 
 	// App is the macOS application that 'open -a' starts.

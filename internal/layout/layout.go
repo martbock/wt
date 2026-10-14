@@ -3,8 +3,7 @@
 //	<container>/            plain folder, named after the repository
 //	  main/                 the clone; stays on the default branch, never edited
 //	  worktrees/<slug>/     one linked worktree per task
-//	  wt.links              paths symlinked from main/ into every worktree
-//	  wt.conf               per-repository settings, e.g. which IDE to open
+//	  wt.yml                per-repository settings: the IDE to open and the paths to share
 package layout
 
 import (
@@ -22,8 +21,7 @@ import (
 const (
 	MainDir      = "main"
 	WorktreesDir = "worktrees"
-	LinksFile    = "wt.links"
-	ConfigFile   = "wt.conf"
+	ConfigFile   = "wt.yml"
 )
 
 // ErrNotManaged is returned when a directory is not inside a <container>/main clone.

@@ -54,13 +54,14 @@ func setup(t *testing.T) manager.Manager {
 	return m
 }
 
-// setupUnlinked is setup with the freshly initialized, empty wt.links.
+// setupUnlinked is setup with the freshly initialized, wt.yml that links nothing.
 func setupUnlinked(t *testing.T) manager.Manager {
 	t.Helper()
 
 	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	t.Setenv(ide.AppEnv, "")
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("GIT_AUTHOR_NAME", "Test")
 	t.Setenv("GIT_AUTHOR_EMAIL", "test@example.com")
 	t.Setenv("GIT_COMMITTER_NAME", "Test")

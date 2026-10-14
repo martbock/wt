@@ -7,15 +7,15 @@ import (
 	"github.com/martbock/wt/internal/links"
 )
 
-// WorktreeLinks is what a change to wt.links did in one worktree.
+// WorktreeLinks is what a change to the links in wt.yml did in one worktree.
 type WorktreeLinks struct {
 	Slug    string
 	Actions []links.Action
 }
 
-// LinkChange reports a change to wt.links and its effect on the existing worktrees.
+// LinkChange reports a change to the links in wt.yml and its effect on the existing worktrees.
 type LinkChange struct {
-	// Changed are the entries added to or removed from wt.links.
+	// Changed are the entries added to or removed from the links in wt.yml.
 	Changed []links.Entry
 
 	// Unchanged are the entries that were already listed (adding), so only re-applied.
@@ -24,7 +24,7 @@ type LinkChange struct {
 	Worktrees []WorktreeLinks
 }
 
-// LinkInfo is one wt.links entry and what it selects in main/.
+// LinkInfo is one entry of the links in wt.yml and what it selects in main/.
 type LinkInfo struct {
 	Entry links.Entry
 
@@ -32,7 +32,7 @@ type LinkInfo struct {
 	Matches []string
 }
 
-// Links lists the entries of wt.links.
+// Links lists the entries of the links in wt.yml.
 func (m Manager) Links() ([]LinkInfo, error) {
 	entries, err := links.Load(m.Layout.Container)
 	if err != nil {
@@ -51,7 +51,7 @@ func (m Manager) Links() ([]LinkInfo, error) {
 	return infos, nil
 }
 
-// AddLinks lists paths in wt.links and symlinks them into every existing worktree. Paths that
+// AddLinks lists paths in the links of wt.yml and symlinks them into every existing worktree. Paths that
 // are already listed are applied again, which repairs worktrees that lack the link.
 func (m Manager) AddLinks(ctx context.Context, paths []string) (LinkChange, error) {
 	entries, err := links.ParseEntries(paths)
@@ -76,7 +76,7 @@ func (m Manager) AddLinks(ctx context.Context, paths []string) (LinkChange, erro
 	return change, err
 }
 
-// RemoveLinks drops paths from wt.links and removes their symlinks from every existing worktree.
+// RemoveLinks drops paths from the links of wt.yml and removes their symlinks from every existing worktree.
 // Files in main/ are never touched, and a path that is not listed is an error that changes
 // nothing.
 func (m Manager) RemoveLinks(ctx context.Context, paths []string) (LinkChange, error) {
@@ -97,7 +97,7 @@ func (m Manager) RemoveLinks(ctx context.Context, paths []string) (LinkChange, e
 	return change, err
 }
 
-// SyncLinks applies wt.links as it is now to every existing worktree, for after editing the
+// SyncLinks applies the links in wt.yml as it is now to every existing worktree, for after editing the
 // file by hand. It only adds links: use RemoveLinks to take paths away.
 func (m Manager) SyncLinks(ctx context.Context) (LinkChange, error) {
 	entries, err := links.Load(m.Layout.Container)

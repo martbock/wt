@@ -32,7 +32,7 @@ description: Create, list, open or remove git worktrees, each with its own branc
 | List shared (symlinked) files | `wt link ls` |
 | Share a file with every worktree, existing ones included | `wt link add .env 'config/local*.yaml'` |
 | Stop sharing it | `wt link rm .env` |
-| Link what `wt.links` lists into existing worktrees | `wt link sync` |
+| Link what the `links` in `wt.yml` list into existing worktrees | `wt link sync` |
 | Remove it (and its branch, if no commits are lost) | `wt rm <slug>` |
 
 `--prefix` only changes the branch name (`fix/login-bug`), not the directory. `--branch` checks out
@@ -51,11 +51,11 @@ Only clean up worktrees the user asked about, and never with `--force` unless as
 
 ## Shared files and the IDE
 
-- Nothing is shared between worktrees by default: `wt.links` starts empty. If the user wants local
+- Nothing is shared between worktrees by default: `wt.yml` links nothing to start with. If the user wants local
   config or `.env` available in worktrees, use `wt link add`; it also fixes worktrees that already
   exist. Do not guess which files to share; ask or look at what is gitignored in `main/`.
 - `wt link rm` only deletes symlinks into `main/`, never the files in `main/`.
-- The IDE is per repository (`wt.conf`), so a Go repository can use GoLand and a Node one VS Code.
+- The IDE is per repository (`wt.yml`), so a Go repository can use GoLand and a Node one VS Code.
   `wt open <slug>` uses it.
 - `wt ui` is an interactive full-screen mode for the user. It needs a terminal, so do not run it
   yourself.

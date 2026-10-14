@@ -9,8 +9,8 @@ task. Built for working on several tickets in parallel while reviewing each one 
 ├── worktrees/
 │   ├── fix-login-bug/                  branch PROJ-123-fix-login-bug
 │   └── add-csv-export/                 branch feat/add-csv-export
-├── wt.links                            what to symlink from main/ into every worktree (empty by default)
-└── wt.conf                             per-repository settings: which IDE to open
+└── wt.yml                              per-repository settings: which IDE to open, what to symlink
+                                        from main/ into every worktree (nothing by default)
 ```
 
 ## Install
@@ -39,10 +39,10 @@ wt clone git@github.com:acme/web.git ~/git/acme/web --ide vscode
 cd <container>/main && wt init
 ```
 
-Nothing is shared between worktrees unless you ask for it: `wt.links` starts out empty, and
+Nothing is shared between worktrees unless you ask for it: `wt.yml` links nothing to start with, and
 `--link` (repeatable) is how a repository opts in. `--seed` copies exactly the `--link` paths.
 
-`wt init` is safe to repeat. It writes an empty `wt.links` if there is none, names the main clone's
+`wt init` is safe to repeat. It writes a `wt.yml` that links nothing if there is none, names the main clone's
 JetBrains project after the repository (so its window is not called "main"), and installs a
 `pre-commit` hook that refuses commits in `main/` (linked worktrees are unaffected). An existing,
 different `pre-commit` hook is left alone and reported.
@@ -127,20 +127,34 @@ needs a terminal; every action is also available as a plain command.
 ## IDE per repository
 
 `wt open` and the `o` key use the IDE chosen for the repository, so Go repositories can open in
-GoLand and Node ones in VS Code. It is stored in `wt.conf` next to `wt.links`:
+GoLand and Node ones in VS Code. It is stored in `wt.yml` next to `main/`:
 
 ```bash
 wt ide                    # show the IDE and where the choice comes from
 wt ide set vscode         # goland, webstorm, idea, pycharm, vscode, cursor ... or any macOS app name
 wt ide set "Sublime Text" # not a preset: runs `open -a "Sublime Text" <worktree>`
-wt ide unset              # back to $WT_IDE_APP, then GoLand
+wt ide unset              # back to $WT_IDE_APP, then the global IDE, then GoLand
 ```
 
-Precedence: `wt.conf`, then `$WT_IDE_APP` (a preset name or an app name), then GoLand. Only
+Precedence: `wt.yml`, then `$WT_IDE_APP` (a preset name or an app name), then the global IDE
+(below), then GoLand. Only
 JetBrains IDEs get a project name (`.idea/.name`); a VS Code repository is left without `.idea/`.
 Switching IDE does not touch worktrees that already exist.
 
-## Shared files: `wt.links`
+## Global settings: `wt global`
+
+Settings for every repository live in `~/.config/wt/config.yml` (`$XDG_CONFIG_HOME/wt/config.yml`
+when that is set), for example `ide: vscode`. A repository's own `wt.yml` wins over them. `wt global` edits the file; editing it by hand works too:
+
+```bash
+wt global                  # the file and the current settings
+wt global set ide vscode   # the IDE for repositories that do not choose one
+wt global unset ide
+```
+
+`ide` is the only setting so far.
+
+## Shared files: `links` in `wt.yml`
 
 Gitignored files that worktrees need (local config, `.env`, GoLand run configurations) live once,
 in `main/`, and each worktree symlinks to them with a relative link. Editing `config/local.yaml`
@@ -151,17 +165,21 @@ nothing is shared until you list it, at `wt clone --link` or later:
 wt link ls                             # what is shared, and how many files each path selects in main/
 wt link add 'config/local*.yaml' .env  # list it AND link it into every existing worktree
 wt link rm .env                        # unlist it AND remove the links from every existing worktree
-wt link sync                           # after editing wt.links by hand: link everything into every worktree
+wt link sync                           # after editing wt.yml by hand: link everything into every worktree
 ```
 
-`wt.links` is a plain file, one path per line (`wt new` reads it too):
+The paths are the `links` list in `wt.yml` (`wt new` reads it too):
 
+```yaml
+ide: goland
+links:
+  - config/local*.yaml
+  - .env
+  - .env.*
+  - .idea/runConfigurations/
 ```
-config/local*.yaml
-.env
-.env.*
-.idea/runConfigurations/
-```
+
+`wt` keeps the comments and any other keys when it rewrites the file.
 
 - Globs are allowed. Paths that don't exist in `main/` yet are listed anyway, and linked once
   they exist (`wt link sync`).
@@ -181,7 +199,7 @@ which is per project and not shared.
 
 - The `pre-commit` hook installed by `wt init` blocks commits in `main/`.
 - `wt guard` is a Claude Code `PreToolUse` hook that denies Edit, Write and NotebookEdit calls
-  targeting a `main/` clone. It only acts inside containers that have a `wt.links`, which `wt clone` and `wt init` always create. Register it in
+  targeting a `main/` clone. It only acts inside containers that have a `wt.yml`, which `wt clone` and `wt init` always create. Register it in
   `~/.claude/settings.json`:
 
   ```json
@@ -219,5 +237,5 @@ make lint
 
 Layout: `cmd/wt` (entry point), `internal/cli` (cobra and rendering only), `internal/tui`
 (bubbletea interactive mode, tested against a fake backend), `internal/manager` (the operations,
-returning plain data), `internal/layout`, `internal/links` (`wt.links`), `internal/config`
-(`wt.conf`), `internal/ide`, `internal/session`, `internal/guard`, `internal/gitx`.
+returning plain data), `internal/layout`, `internal/links`, `internal/config`
+(`wt.yml` and the global `config.yml`), `internal/ide`, `internal/session`, `internal/guard`, `internal/gitx`.

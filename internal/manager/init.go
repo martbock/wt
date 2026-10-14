@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/martbock/wt/internal/config"
 	"github.com/martbock/wt/internal/gitx"
 	"github.com/martbock/wt/internal/ide"
-	"github.com/martbock/wt/internal/layout"
 	"github.com/martbock/wt/internal/links"
 )
 
@@ -37,27 +37,24 @@ const (
 
 // InitResult reports what Init set up.
 type InitResult struct {
-	LinksFile    string
-	LinksCreated bool
-	Links        []links.Entry
-	IDE          ChosenIDE
-	Hook         HookStatus
+	ConfigFile    string
+	ConfigCreated bool
+	Links         []links.Entry
+	IDE           ChosenIDE
+	Hook          HookStatus
 }
 
-// Init prepares a main clone for worktrees: it writes an empty wt.links, names the main
+// Init prepares a main clone for worktrees: it writes a wt.yml that links nothing, names the main
 // JetBrains project after the repository, and installs a pre-commit hook that refuses commits in main/.
 // It is safe to run repeatedly.
 func (m Manager) Init(ctx context.Context) (InitResult, error) {
-	res := InitResult{LinksFile: filepath.Join(m.Layout.Container, layout.LinksFile)}
+	res := InitResult{ConfigFile: config.File(m.Layout.Container)}
 
-	if _, err := os.Stat(res.LinksFile); errors.Is(err, fs.ErrNotExist) {
-		if err := os.WriteFile(res.LinksFile, []byte(links.Default), 0o644); err != nil {
-			return res, err
-		}
-		res.LinksCreated = true
-	} else if err != nil {
+	created, err := config.Ensure(m.Layout.Container)
+	if err != nil {
 		return res, err
 	}
+	res.ConfigCreated = created
 
 	if err := os.MkdirAll(m.Layout.Worktrees, 0o755); err != nil {
 		return res, err

@@ -15,7 +15,7 @@ func newUICmd() *cobra.Command {
 
   enter  start a Claude session in the worktree     c  continue its last session
   o      open it in the IDE (see 'wt ide')          n  new worktree: [slug] [--prefix P] [--branch B]
-  d      remove it (and its branch, if safe)        l  shared files (wt.links): add, remove, sync
+  d      remove it (and its branch, if safe)        l  shared files (wt.yml): add, remove, sync
   r      refresh                                    q  quit
 
 A Claude session takes over the terminal; when it ends you are back in the list.`,

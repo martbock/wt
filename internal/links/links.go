@@ -3,7 +3,6 @@
 package links
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"io"
@@ -13,30 +12,17 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/martbock/wt/internal/config"
 	"github.com/martbock/wt/internal/layout"
 )
 
-// Default is the contents of a freshly created wt.links. It lists nothing: which files are worth
-// sharing depends on the repository, so every repository opts in.
-const Default = `# Paths relative to main/ that every worktree symlinks back to main/. Nothing is linked until it
-# is listed here. Manage the list with 'wt link add|rm', or edit it and run 'wt link sync'.
-#
-# Globs are allowed. A trailing slash marks a directory: it is created in main/ if missing, so
-# files the IDE writes into it from a worktree land in main/ too.
-#
-# Examples:
-#   config/local*.yaml
-#   .env
-#   .idea/runConfigurations/
-`
-
-// Entry is one line of wt.links.
+// Entry is one path in the links list of wt.yml.
 type Entry struct {
 	Pattern string
 	Dir     bool
 }
 
-// String formats the entry the way it is written in wt.links.
+// String formats the entry the way it is written in wt.yml.
 func (e Entry) String() string {
 	if e.Dir {
 		return filepath.ToSlash(e.Pattern) + "/"
@@ -45,11 +31,11 @@ func (e Entry) String() string {
 	return filepath.ToSlash(e.Pattern)
 }
 
-// NotListedError means paths that were to be removed from wt.links are not in it.
+// NotListedError means paths that were to be removed from the links list are not in it.
 type NotListedError struct{ Patterns []string }
 
 func (e *NotListedError) Error() string {
-	return fmt.Sprintf("not in %s: %s (see 'wt link ls')", layout.LinksFile, strings.Join(e.Patterns, ", "))
+	return fmt.Sprintf("not in %s: %s (see 'wt link ls')", layout.ConfigFile, strings.Join(e.Patterns, ", "))
 }
 
 // Status is what happened to one path.
@@ -73,7 +59,7 @@ type Action struct {
 	Detail string
 }
 
-// ParseEntry reads one path as written in wt.links or on the command line.
+// ParseEntry reads one path as written in wt.yml or on the command line.
 func ParseEntry(line string) (Entry, error) {
 	line = strings.TrimSpace(line)
 	if line == "" {
@@ -110,141 +96,99 @@ func ParseEntries(lines []string) ([]Entry, error) {
 	return entries, nil
 }
 
-// Parse reads the wt.links format.
-func Parse(r io.Reader) ([]Entry, error) {
-	var entries []Entry
-
-	scanner := bufio.NewScanner(r)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-
-		e, err := ParseEntry(line)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", layout.LinksFile, err)
-		}
-		entries = append(entries, e)
-	}
-
-	return entries, scanner.Err()
-}
-
-// Load reads wt.links from the container. A missing file means nothing is linked.
+// Load reads the links list of wt.yml in the container. A missing file or list means nothing is
+// linked.
 func Load(container string) ([]Entry, error) {
-	f, err := os.Open(filepath.Join(container, layout.LinksFile))
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil, nil
-	}
+	cfg, err := config.Load(container)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = f.Close() }()
 
-	return Parse(f)
+	entries, err := ParseEntries(cfg.Links)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", layout.ConfigFile, err)
+	}
+
+	return entries, nil
 }
 
-// AddToFile appends entries to wt.links, creating it from Default if there is none. Entries whose
-// pattern is already listed are left out of the result and not written twice. Comments and the
-// order of the existing lines are kept.
+// AddToFile appends entries to the links list of wt.yml, creating the file from its template if
+// there is none. Entries whose pattern is already listed are left out of the result and not
+// written twice. Comments and the order of the existing items are kept.
 func AddToFile(container string, entries []Entry) ([]Entry, error) {
-	path := filepath.Join(container, layout.LinksFile)
-
-	raw, err := readFile(path)
-	if err != nil {
-		return nil, err
-	}
-	listed, err := Parse(strings.NewReader(raw))
-	if err != nil {
-		return nil, err
-	}
-
-	have := make(map[string]bool, len(listed))
-	for _, e := range listed {
-		have[e.Pattern] = true
-	}
-
 	var added []Entry
-	var b strings.Builder
-	switch {
-	case raw == "":
-		b.WriteString(Default)
-	case !strings.HasSuffix(raw, "\n"):
-		b.WriteString(raw + "\n")
-	default:
-		b.WriteString(raw)
-	}
 
-	for _, e := range entries {
-		if have[e.Pattern] {
-			continue
+	err := config.EditLinks(container, func(current []string) ([]string, error) {
+		listed, err := ParseEntries(current)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", layout.ConfigFile, err)
 		}
-		have[e.Pattern] = true
-		added = append(added, e)
-		b.WriteString(e.String() + "\n")
-	}
-	if len(added) == 0 {
-		return nil, nil
-	}
 
-	return added, os.WriteFile(path, []byte(b.String()), 0o644)
+		have := make(map[string]bool, len(listed))
+		for _, e := range listed {
+			have[e.Pattern] = true
+		}
+
+		for _, e := range entries {
+			if have[e.Pattern] {
+				continue
+			}
+			have[e.Pattern] = true
+			added = append(added, e)
+			current = append(current, e.String())
+		}
+
+		return current, nil
+	})
+
+	return added, err
 }
 
-// RemoveFromFile deletes the lines of wt.links whose pattern equals one of entries' (a trailing
-// slash does not matter) and returns the entries as they were listed. It changes nothing and
-// returns a *NotListedError if any of them is not listed.
+// RemoveFromFile deletes the items of the links list whose pattern equals one of entries' (a
+// trailing slash does not matter) and returns the entries as they were listed. It changes nothing
+// and returns a *NotListedError if any of them is not listed.
 func RemoveFromFile(container string, entries []Entry) ([]Entry, error) {
-	path := filepath.Join(container, layout.LinksFile)
-
-	raw, err := readFile(path)
-	if err != nil {
-		return nil, err
-	}
-	if _, err := Parse(strings.NewReader(raw)); err != nil {
-		return nil, err
-	}
-
-	want := make(map[string]bool, len(entries))
-	for _, e := range entries {
-		want[e.Pattern] = true
-	}
-
 	var removed []Entry
-	var kept strings.Builder
-	for _, line := range strings.SplitAfter(raw, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if trimmed != "" && !strings.HasPrefix(trimmed, "#") {
-			if e, err := ParseEntry(trimmed); err == nil && want[e.Pattern] {
+
+	err := config.EditLinks(container, func(current []string) ([]string, error) {
+		listed, err := ParseEntries(current)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", layout.ConfigFile, err)
+		}
+
+		want := make(map[string]bool, len(entries))
+		for _, e := range entries {
+			want[e.Pattern] = true
+		}
+
+		var kept []string
+		for i, e := range listed {
+			if want[e.Pattern] {
 				removed = append(removed, e)
 				delete(want, e.Pattern)
 				continue
 			}
+			kept = append(kept, current[i])
 		}
-		kept.WriteString(line)
-	}
 
-	if len(want) > 0 {
-		var missing []string
-		for _, e := range entries {
-			if want[e.Pattern] {
-				missing = append(missing, e.String())
+		if len(want) > 0 {
+			var missing []string
+			for _, e := range entries {
+				if want[e.Pattern] {
+					missing = append(missing, e.String())
+				}
 			}
+
+			return nil, &NotListedError{Patterns: missing}
 		}
 
-		return nil, &NotListedError{Patterns: missing}
+		return kept, nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	return removed, os.WriteFile(path, []byte(kept.String()), 0o644)
-}
-
-func readFile(path string) (string, error) {
-	b, err := os.ReadFile(path)
-	if errors.Is(err, fs.ErrNotExist) {
-		return "", nil
-	}
-
-	return string(b), err
+	return removed, nil
 }
 
 // Apply symlinks every path matched by entries in mainDir to the same relative path in

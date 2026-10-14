@@ -274,7 +274,7 @@ func TestInit_IsIdempotentAndKeepsForeignHook(t *testing.T) {
 	res, err := m.Init(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, manager.HookCurrent, res.Hook)
-	assert.False(t, res.LinksCreated)
+	assert.False(t, res.ConfigCreated)
 
 	hook := filepath.Join(m.Layout.Main, ".git", "hooks", "pre-commit")
 	require.NoError(t, os.WriteFile(hook, []byte("#!/bin/sh\nexit 0\n"), 0o755))
@@ -384,7 +384,7 @@ func TestClone_LaysOutSeedsAndInitializes(t *testing.T) {
 	assert.Equal(t, filepath.Join(root, "new", "main"), got.Layout.Main)
 	assert.Equal(t, "new", got.Layout.Repo)
 	assert.Equal(t, manager.HookInstalled, got.Init.Hook)
-	assert.FileExists(t, got.Init.LinksFile)
+	assert.FileExists(t, got.Init.ConfigFile)
 	assert.Len(t, got.Init.Links, 2)
 
 	local, err := os.ReadFile(filepath.Join(got.Layout.Main, "config", "local.yaml"))

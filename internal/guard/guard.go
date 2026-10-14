@@ -84,11 +84,11 @@ func Run(r io.Reader, w io.Writer) error {
 }
 
 // managedMain finds the enclosing <container>/main directory of path, if the container holds a
-// wt.links file.
+// wt.yml file.
 func managedMain(path string) (string, bool) {
 	for dir := path; ; dir = filepath.Dir(dir) {
 		if filepath.Base(dir) == layout.MainDir {
-			if _, err := os.Stat(filepath.Join(filepath.Dir(dir), layout.LinksFile)); err == nil {
+			if _, err := os.Stat(filepath.Join(filepath.Dir(dir), layout.ConfigFile)); err == nil {
 				return dir, true
 			}
 		}

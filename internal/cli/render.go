@@ -18,18 +18,18 @@ func renderInit(w io.Writer, l layout.Layout, res manager.InitResult, seeded []l
 	fmt.Fprintf(w, "  main       %s\n", l.Main)
 	fmt.Fprintf(w, "  worktrees  %s\n", l.Worktrees)
 
-	if res.LinksFile != "" {
+	if res.ConfigFile != "" {
 		state := "kept"
-		if res.LinksCreated {
+		if res.ConfigCreated {
 			state = "created"
 		}
-		fmt.Fprintf(w, "  wt.links   %s (%s)\n", res.LinksFile, state)
+		fmt.Fprintf(w, "  wt.yml     %s (%s)\n", res.ConfigFile, state)
 	}
 	if res.IDE.IDE.App != "" {
 		fmt.Fprintf(w, "  ide        %s (%s)\n", res.IDE.IDE.App, res.IDE.Source)
 	}
 	renderEntries(w, res.Links)
-	if res.LinksCreated && len(res.Links) == 0 {
+	if res.ConfigCreated && len(res.Links) == 0 {
 		fmt.Fprintln(w, "  No files are shared between worktrees yet. Add some with 'wt link add <path>'.")
 	}
 	if res.Hook != "" {
@@ -71,15 +71,15 @@ func renderLinks(w io.Writer, infos []manager.LinkInfo) {
 	_ = tw.Flush()
 }
 
-// renderLinkChange reports a wt.links change and what it did in each worktree. verb is empty for
+// renderLinkChange reports a change to the links in wt.yml and what it did in each worktree. verb is empty for
 // a plain sync, which changes no entries.
 func renderLinkChange(w io.Writer, verb string, c manager.LinkChange) {
 	for _, e := range c.Changed {
-		fmt.Fprintf(w, "%s wt.links: %s\n", verb, e)
+		fmt.Fprintf(w, "%s links: %s\n", verb, e)
 	}
 	if verb != "" {
 		for _, e := range c.Unchanged {
-			fmt.Fprintf(w, "Already in wt.links: %s\n", e)
+			fmt.Fprintf(w, "Already in wt.yml links: %s\n", e)
 		}
 	}
 

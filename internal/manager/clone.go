@@ -23,11 +23,11 @@ type CloneOptions struct {
 	Dir string
 
 	// Links are the paths, relative to main/, that worktrees symlink back to main/. They are
-	// written to wt.links. Empty links nothing; it can be changed later with AddLinks and
+	// written to wt.yml. Empty links nothing; it can be changed later with AddLinks and
 	// RemoveLinks.
 	Links []string
 
-	// IDE is written to wt.conf as this repository's IDE: a preset such as "vscode" or a macOS
+	// IDE is written to wt.yml as this repository's IDE: a preset such as "vscode" or a macOS
 	// application name. Empty leaves the choice to $WT_IDE_APP and the default.
 	IDE string
 
@@ -56,7 +56,7 @@ func RepoName(url string) (string, error) {
 	return m[1], nil
 }
 
-// Clone clones a repository into <dir>/main, initializes it and lists opts.Links in wt.links.
+// Clone clones a repository into <dir>/main, initializes it and lists opts.Links in wt.yml.
 func Clone(ctx context.Context, opts CloneOptions) (Cloned, error) {
 	dir := opts.Dir
 	if dir == "" {
@@ -104,6 +104,10 @@ func Clone(ctx context.Context, opts CloneOptions) (Cloned, error) {
 	res := Cloned{Layout: l}
 
 	// Before Init, which names the project only for JetBrains IDEs.
+	configCreated, err := config.Ensure(l.Container)
+	if err != nil {
+		return res, fmt.Errorf("cloned to %s, but writing %s failed: %w", l.Main, layout.ConfigFile, err)
+	}
 	if opts.IDE != "" {
 		if err := config.SetIDE(l.Container, opts.IDE); err != nil {
 			return res, fmt.Errorf("cloned to %s, but writing %s failed: %w", l.Main, layout.ConfigFile, err)
@@ -111,13 +115,14 @@ func Clone(ctx context.Context, opts CloneOptions) (Cloned, error) {
 	}
 
 	init, err := Manager{Layout: l}.Init(ctx)
+	init.ConfigCreated = configCreated
 	res.Init = init
 	if err != nil {
 		return res, fmt.Errorf("cloned to %s, but init failed: %w", l.Main, err)
 	}
 
 	if _, err := links.AddToFile(l.Container, entries); err != nil {
-		return res, fmt.Errorf("cloned to %s, but writing %s failed: %w", l.Main, layout.LinksFile, err)
+		return res, fmt.Errorf("cloned to %s, but writing %s failed: %w", l.Main, layout.ConfigFile, err)
 	}
 	if res.Init.Links, err = links.Load(l.Container); err != nil {
 		return res, err

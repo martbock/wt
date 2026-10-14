@@ -13,8 +13,9 @@ import (
 type IDESource string
 
 const (
-	IDEFromConfig  IDESource = "wt.conf"
+	IDEFromConfig  IDESource = "wt.yml"
 	IDEFromEnv     IDESource = "$" + ide.AppEnv
+	IDEFromGlobal  IDESource = "global config"
 	IDEFromDefault IDESource = "default"
 )
 
@@ -24,9 +25,15 @@ type ChosenIDE struct {
 	Source IDESource
 }
 
-// IDE returns the IDE for this repository: the one in wt.conf, else $WT_IDE_APP, else GoLand.
+// IDE returns the IDE for this repository: the one in wt.yml, else $WT_IDE_APP, else the one in
+// the global config, else GoLand.
 func (m Manager) IDE() (ChosenIDE, error) {
 	cfg, err := config.Load(m.Layout.Container)
+	if err != nil {
+		return ChosenIDE{}, err
+	}
+
+	global, err := config.LoadGlobal()
 	if err != nil {
 		return ChosenIDE{}, err
 	}
@@ -36,6 +43,8 @@ func (m Manager) IDE() (ChosenIDE, error) {
 		return ChosenIDE{IDE: ide.Resolve(cfg.IDE), Source: IDEFromConfig}, nil
 	case strings.TrimSpace(os.Getenv(ide.AppEnv)) != "":
 		return ChosenIDE{IDE: ide.Default(), Source: IDEFromEnv}, nil
+	case global.IDE != "":
+		return ChosenIDE{IDE: ide.Resolve(global.IDE), Source: IDEFromGlobal}, nil
 	default:
 		return ChosenIDE{IDE: ide.Default(), Source: IDEFromDefault}, nil
 	}

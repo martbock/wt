@@ -31,7 +31,7 @@ func TestDecide(t *testing.T) {
 	worktree := filepath.Join(container, "worktrees", "task")
 	require.NoError(t, os.MkdirAll(filepath.Join(mainDir, "pkg"), 0o755))
 	require.NoError(t, os.MkdirAll(worktree, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(container, layout.LinksFile), nil, 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(container, layout.ConfigFile), nil, 0o644))
 
 	unmanaged := filepath.Join(root, "other", "main")
 	require.NoError(t, os.MkdirAll(unmanaged, 0o755))
@@ -59,7 +59,7 @@ func TestDecide(t *testing.T) {
 func TestRun_WritesDenyResponse(t *testing.T) {
 	container := filepath.Join(t.TempDir(), "repo")
 	require.NoError(t, os.MkdirAll(filepath.Join(container, "main"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(container, layout.LinksFile), nil, 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(container, layout.ConfigFile), nil, 0o644))
 
 	payload := `{"tool_name":"Write","cwd":"` + container + `/main","tool_input":{"file_path":"` + container + `/main/x.go"}}`
 

@@ -18,8 +18,9 @@ import (
 type CloneOptions struct {
 	URL string
 
-	// Root is the directory that holds <org>/<repo> containers, e.g. ~/git.
-	Root string
+	// Dir is the container directory, relative to the current directory like git clone's. Empty
+	// means the repository's name.
+	Dir string
 
 	// Links are the paths, relative to main/, that worktrees symlink back to main/. They are
 	// written to wt.links. Empty links nothing; it can be changed later with AddLinks and
@@ -42,22 +43,31 @@ type Cloned struct {
 	Seeded []links.Action
 }
 
-var remoteRE = regexp.MustCompile(`^(?:[A-Za-z][A-Za-z0-9+.-]*://)?(?:[^@/]+@)?[^/:]+[:/](?:.+/)?([^/]+)/([^/]+?)(?:\.git)?/?$`)
+var repoRE = regexp.MustCompile(`[/:]([^/:]+?)(?:\.git)?/*$`)
 
-// OrgAndRepo extracts the last two path components of a git remote URL.
-func OrgAndRepo(url string) (org, repo string, err error) {
-	m := remoteRE.FindStringSubmatch(url)
+// RepoName extracts the repository name, the last path component without ".git", from a git
+// remote URL or path, the way git clone does.
+func RepoName(url string) (string, error) {
+	m := repoRE.FindStringSubmatch(url)
 	if m == nil {
-		return "", "", fmt.Errorf("cannot derive <org>/<repo> from %q", url)
+		return "", fmt.Errorf("cannot derive a repository name from %q", url)
 	}
 
-	return m[1], m[2], nil
+	return m[1], nil
 }
 
-// Clone clones a repository into <root>/<org>/<repo>/main, initializes it and lists opts.Links
-// in wt.links.
+// Clone clones a repository into <dir>/main, initializes it and lists opts.Links in wt.links.
 func Clone(ctx context.Context, opts CloneOptions) (Cloned, error) {
-	org, repo, err := OrgAndRepo(opts.URL)
+	dir := opts.Dir
+	if dir == "" {
+		repo, err := RepoName(opts.URL)
+		if err != nil {
+			return Cloned{}, err
+		}
+		dir = repo
+	}
+
+	dir, err := filepath.Abs(dir)
 	if err != nil {
 		return Cloned{}, err
 	}
@@ -71,15 +81,23 @@ func Clone(ctx context.Context, opts CloneOptions) (Cloned, error) {
 		return Cloned{}, errors.New("nothing to seed: say which paths to copy with --link")
 	}
 
-	l := layout.FromContainer(filepath.Join(opts.Root, org, repo))
+	l := layout.FromContainer(dir)
 	if _, err := os.Lstat(l.Main); err == nil {
 		return Cloned{}, fmt.Errorf("%s already exists", l.Main)
 	}
+
+	_, statErr := os.Lstat(l.Container)
+	createdContainer := errors.Is(statErr, os.ErrNotExist)
 
 	if err := os.MkdirAll(l.Container, 0o755); err != nil {
 		return Cloned{}, err
 	}
 	if _, err := gitx.Run(ctx, l.Container, "clone", opts.URL, layout.MainDir); err != nil {
+		// Like git clone, leave nothing behind that this call created.
+		if createdContainer {
+			_ = os.RemoveAll(l.Container)
+		}
+
 		return Cloned{}, err
 	}
 

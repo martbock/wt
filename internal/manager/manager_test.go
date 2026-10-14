@@ -288,27 +288,26 @@ func TestInit_IsIdempotentAndKeepsForeignHook(t *testing.T) {
 	assert.Equal(t, "#!/bin/sh\nexit 0\n", string(content))
 }
 
-func TestOrgAndRepo(t *testing.T) {
-	tests := []struct {
-		url, org, repo string
-	}{
-		{"git@github.com:acme/api.git", "acme", "api"},
-		{"https://github.com/acme/api", "acme", "api"},
-		{"https://github.com/acme/api.git/", "acme", "api"},
-		{"ssh://git@gitlab.com/group/sub/repo.git", "sub", "repo"},
+func TestRepoName(t *testing.T) {
+	tests := map[string]string{
+		"git@github.com:acme/api.git":             "api",
+		"https://github.com/acme/api":             "api",
+		"https://github.com/acme/api.git/":        "api",
+		"ssh://git@gitlab.com/group/sub/repo.git": "repo",
+		"/srv/git/api.git":                        "api",
+		"git@example.com:api.git":                 "api",
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.url, func(t *testing.T) {
-			org, repo, err := manager.OrgAndRepo(tt.url)
+	for url, want := range tests {
+		t.Run(url, func(t *testing.T) {
+			got, err := manager.RepoName(url)
 
 			require.NoError(t, err)
-			assert.Equal(t, tt.org, org)
-			assert.Equal(t, tt.repo, repo)
+			assert.Equal(t, want, got)
 		})
 	}
 
-	_, _, err := manager.OrgAndRepo("nonsense")
+	_, err := manager.RepoName("nonsense")
 	assert.Error(t, err)
 }
 
@@ -332,7 +331,7 @@ const freshURL = "git@example.com:acme/fresh.git"
 func TestClone_LinksNothingByDefault(t *testing.T) {
 	existing, root := cloneFixture(t)
 
-	got, err := manager.Clone(t.Context(), manager.CloneOptions{URL: freshURL, Root: filepath.Join(root, "new")})
+	got, err := manager.Clone(t.Context(), manager.CloneOptions{URL: freshURL, Dir: filepath.Join(root, "new")})
 	require.NoError(t, err)
 
 	assert.Empty(t, got.Init.Links)
@@ -353,7 +352,7 @@ func TestClone_LinksNothingByDefault(t *testing.T) {
 
 func TestClone_RejectsBadInputBeforeCloning(t *testing.T) {
 	existing, root := cloneFixture(t)
-	newRoot := filepath.Join(root, "new")
+	dir := filepath.Join(root, "new")
 
 	for name, opts := range map[string]manager.CloneOptions{
 		"seed without links": {Seed: existing.Layout.Main},
@@ -361,12 +360,12 @@ func TestClone_RejectsBadInputBeforeCloning(t *testing.T) {
 		"link out of main":   {Links: []string{"../x"}},
 	} {
 		t.Run(name, func(t *testing.T) {
-			opts.URL, opts.Root = freshURL, newRoot
+			opts.URL, opts.Dir = freshURL, dir
 
 			_, err := manager.Clone(t.Context(), opts)
 
 			assert.Error(t, err)
-			assert.NoDirExists(t, filepath.Join(newRoot, "acme"))
+			assert.NoDirExists(t, dir)
 		})
 	}
 }
@@ -376,14 +375,14 @@ func TestClone_LaysOutSeedsAndInitializes(t *testing.T) {
 
 	got, err := manager.Clone(t.Context(), manager.CloneOptions{
 		URL:   freshURL,
-		Root:  filepath.Join(root, "new"),
+		Dir:   filepath.Join(root, "new"),
 		Links: []string{"config/local*.yaml", ".env"},
 		Seed:  existing.Layout.Main,
 	})
 	require.NoError(t, err)
 
-	assert.Equal(t, filepath.Join(root, "new", "acme", "fresh", "main"), got.Layout.Main)
-	assert.Equal(t, "fresh", got.Layout.Repo)
+	assert.Equal(t, filepath.Join(root, "new", "main"), got.Layout.Main)
+	assert.Equal(t, "new", got.Layout.Repo)
 	assert.Equal(t, manager.HookInstalled, got.Init.Hook)
 	assert.FileExists(t, got.Init.LinksFile)
 	assert.Len(t, got.Init.Links, 2)
@@ -397,6 +396,32 @@ func TestClone_LaysOutSeedsAndInitializes(t *testing.T) {
 	require.NoError(t, err)
 	assert.FileExists(t, filepath.Join(created.Path, "config", "local.yaml"))
 
-	_, err = manager.Clone(t.Context(), manager.CloneOptions{URL: freshURL, Root: filepath.Join(root, "new")})
+	_, err = manager.Clone(t.Context(), manager.CloneOptions{URL: freshURL, Dir: filepath.Join(root, "new")})
 	assert.Error(t, err, "cloning over an existing main/ must fail")
+}
+
+func TestClone_DefaultsToTheRepositoryNameInTheCurrentDirectory(t *testing.T) {
+	_, root := cloneFixture(t)
+	cwd := filepath.Join(root, "cwd")
+	require.NoError(t, os.MkdirAll(cwd, 0o755))
+	t.Chdir(cwd)
+
+	got, err := manager.Clone(t.Context(), manager.CloneOptions{URL: freshURL})
+	require.NoError(t, err)
+
+	cwd, err = filepath.EvalSymlinks(cwd)
+	require.NoError(t, err)
+	gotMain, err := filepath.EvalSymlinks(got.Layout.Main)
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(cwd, "fresh", "main"), gotMain)
+}
+
+func TestClone_LeavesNothingBehindWhenTheCloneFails(t *testing.T) {
+	_, root := cloneFixture(t)
+	dir := filepath.Join(root, "new")
+
+	_, err := manager.Clone(t.Context(), manager.CloneOptions{URL: filepath.Join(root, "missing.git"), Dir: dir})
+
+	assert.Error(t, err)
+	assert.NoDirExists(t, dir)
 }

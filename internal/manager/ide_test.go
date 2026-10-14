@@ -60,7 +60,7 @@ func TestIDE_OnlyJetBrainsGetsProjectName(t *testing.T) {
 func TestClone_WritesIDEBeforeInit(t *testing.T) {
 	_, root := cloneFixture(t)
 
-	got, err := manager.Clone(t.Context(), manager.CloneOptions{URL: freshURL, Root: filepath.Join(root, "new"), IDE: "vscode"})
+	got, err := manager.Clone(t.Context(), manager.CloneOptions{URL: freshURL, Dir: filepath.Join(root, "new"), IDE: "vscode"})
 	require.NoError(t, err)
 
 	assert.Equal(t, "Visual Studio Code", got.Init.IDE.IDE.App)

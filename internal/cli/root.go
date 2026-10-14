@@ -23,10 +23,10 @@ func newRoot() *cobra.Command {
 		Long: `wt keeps one read-only clone per repository and gives every task its own worktree,
 branch and Claude Code session.
 
-  <root>/<org>/<repo>/main/           the clone; never edited
-  <root>/<org>/<repo>/worktrees/<slug>/
-  <root>/<org>/<repo>/wt.links        gitignored paths symlinked from main/ into each worktree (none by default)
-  <root>/<org>/<repo>/wt.conf         per-repository settings, e.g. the IDE
+  <repo>/main/                        the clone; never edited
+  <repo>/worktrees/<slug>/
+  <repo>/wt.links                     gitignored paths symlinked from main/ into each worktree (none by default)
+  <repo>/wt.conf                      per-repository settings, e.g. the IDE
 
 Run 'wt ui' for an interactive list of worktrees.`,
 		SilenceUsage:  true,

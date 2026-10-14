@@ -16,17 +16,16 @@ import (
 	"github.com/martbock/wt/internal/session"
 )
 
-const rootEnv = "WT_ROOT"
-
 func newCloneCmd() *cobra.Command {
-	var root, seed, ideName string
+	var seed, ideName string
 	var linkPaths []string
 
 	cmd := &cobra.Command{
-		Use:   "clone <url>",
-		Short: "Clone a repository into <root>/<org>/<repo>/main and set it up for worktrees",
-		Long: `Clone a repository into <root>/<org>/<repo>/main, write wt.links, name the IDE project and
-install a pre-commit hook that refuses commits in main/.
+		Use:   "clone <url> [<directory>]",
+		Short: "Clone a repository into <directory>/main and set it up for worktrees",
+		Long: `Clone a repository into <directory>/main, write wt.links, name the IDE project and install a
+pre-commit hook that refuses commits in main/. Like git clone, <directory> is relative to the
+current directory and defaults to the repository name.
 
 No files are shared between worktrees unless you ask for them: --link lists a path (relative to
 main/, globs allowed, a trailing / for a directory) that every worktree symlinks back to main/.
@@ -36,18 +35,18 @@ Repeat it for several paths. Change the list later with 'wt link add' and 'wt li
 
 --seed copies the --link paths (local config, .env, ...) from an existing clone, so they do not
 have to be recreated by hand.`,
-		Example: `  wt clone git@github.com:acme/api.git
+		Example: `  wt clone git@github.com:acme/api.git              creates ./api/main
+  wt clone git@github.com:acme/api.git ~/git/acme/api
   wt clone git@github.com:acme/api.git --link 'config/local*.yaml' --link .env \
       --seed ~/git/old/api`,
-		Args: cobra.ExactArgs(1),
+		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if root == "" {
-				return fmt.Errorf("no root: pass --root or set $%s", rootEnv)
+			opts := manager.CloneOptions{URL: args[0], Links: linkPaths, IDE: ideName, Seed: expandHome(seed)}
+			if len(args) == 2 {
+				opts.Dir = args[1]
 			}
 
-			res, err := manager.Clone(cmd.Context(), manager.CloneOptions{
-				URL: args[0], Root: expandHome(root), Links: linkPaths, IDE: ideName, Seed: expandHome(seed),
-			})
+			res, err := manager.Clone(cmd.Context(), opts)
 			if res.Layout.Main != "" {
 				renderInit(cmd.OutOrStdout(), res.Layout, res.Init, res.Seeded)
 			}
@@ -56,7 +55,6 @@ have to be recreated by hand.`,
 		},
 	}
 
-	cmd.Flags().StringVar(&root, "root", os.Getenv(rootEnv), "directory holding <org>/<repo> containers (default $"+rootEnv+")")
 	cmd.Flags().StringArrayVar(&linkPaths, "link", nil, "path in main/ to symlink into every worktree (repeatable; default: none)")
 	cmd.Flags().StringVar(&ideName, "ide", "", "IDE for this repository: "+strings.Join(ide.Names(), ", ")+", or a macOS app name (default: $"+ide.AppEnv+" or goland)")
 	cmd.Flags().StringVar(&seed, "seed", "", "existing clone to copy the --link paths from")

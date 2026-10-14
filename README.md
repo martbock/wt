@@ -18,7 +18,6 @@ task. Built for working on several tickets in parallel while reviewing each one 
 ```bash
 make install         # go install ./cmd/wt
 make install-skill   # symlink skills/wt into ~/.claude/skills (the /wt skill)
-export WT_ROOT=~/git   # where `wt clone` puts <org>/<repo> containers
 ```
 
 Shell completion (slugs complete for `rm`, `path`, `claude`, `open`): `wt completion zsh --help`.
@@ -26,14 +25,15 @@ Shell completion (slugs complete for `rm`, `path`, `claude`, `open`): `wt comple
 ## Set up a repository
 
 ```bash
-# New: clone into the layout, choosing the IDE and which gitignored files to share
+# New: clone into ./api (or a directory you name, like git clone), choosing the IDE and which
+# gitignored files to share
 wt clone git@github.com:acme/api.git \
     --ide goland \
     --link 'config/local*.yaml' --link .env --link '.env.*' --link .idea/runConfigurations/ \
     --seed ~/git/old/api      # copy those files from an existing clone
 
 # A repository that needs nothing shared and opens in VS Code
-wt clone git@github.com:acme/web.git --ide vscode
+wt clone git@github.com:acme/web.git ~/git/acme/web --ide vscode
 
 # Existing <container>/main clone
 cd <container>/main && wt init

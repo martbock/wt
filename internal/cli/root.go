@@ -35,6 +35,7 @@ Run 'wt ui' for an interactive list of worktrees.`,
 
 	root.AddCommand(
 		newCloneCmd(),
+		newConvertCmd(),
 		newInitCmd(),
 		newLinkCmd(),
 		newIDECmd(),

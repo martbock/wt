@@ -35,9 +35,20 @@ wt clone git@github.com:acme/api.git \
 # A repository that needs nothing shared and opens in VS Code
 wt clone git@github.com:acme/web.git ~/git/acme/web --ide vscode
 
+# Existing clone with the repository directly in it (~/git/acme/api/.git): convert it in place
+wt convert ~/git/acme/api --link .env
+
 # Existing <container>/main clone
 cd <container>/main && wt init
 ```
+
+`wt convert [<directory>]` (default: the current directory) moves the clone to `<directory>/main`, so the
+directory becomes the container and the repository keeps its name and place. Nothing inside the
+clone changes: uncommitted work, stashes and gitignored local config come along. It then does what
+`wt init` does, and takes `--link` and `--ide` like `wt clone`. Your shell stays at the old path,
+now the container; `cd main` to get back into the clone. `wt` expects `main/` to stay on the default
+branch and clean, so convert says so when it is not, but changes neither. A clone with linked
+worktrees is refused, because they would lose track of it: remove them first.
 
 Nothing is shared between worktrees unless you ask for it: `wt.yml` links nothing to start with, and
 `--link` (repeatable) is how a repository opts in. `--seed` copies exactly the `--link` paths.

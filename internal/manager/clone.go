@@ -103,29 +103,8 @@ func Clone(ctx context.Context, opts CloneOptions) (Cloned, error) {
 
 	res := Cloned{Layout: l}
 
-	// Before Init, which names the project only for JetBrains IDEs.
-	configCreated, err := config.Ensure(l.Container)
-	if err != nil {
-		return res, fmt.Errorf("cloned to %s, but writing %s failed: %w", l.Main, layout.ConfigFile, err)
-	}
-	if opts.IDE != "" {
-		if err := config.SetIDE(l.Container, opts.IDE); err != nil {
-			return res, fmt.Errorf("cloned to %s, but writing %s failed: %w", l.Main, layout.ConfigFile, err)
-		}
-	}
-
-	init, err := Manager{Layout: l}.Init(ctx)
-	init.ConfigCreated = configCreated
-	res.Init = init
-	if err != nil {
-		return res, fmt.Errorf("cloned to %s, but init failed: %w", l.Main, err)
-	}
-
-	if _, err := links.AddToFile(l.Container, entries); err != nil {
-		return res, fmt.Errorf("cloned to %s, but writing %s failed: %w", l.Main, layout.ConfigFile, err)
-	}
-	if res.Init.Links, err = links.Load(l.Container); err != nil {
-		return res, err
+	if res.Init, err = (Manager{Layout: l}).setUp(ctx, opts.IDE, entries); err != nil {
+		return res, fmt.Errorf("cloned to %s, but %w", l.Main, err)
 	}
 
 	if opts.Seed != "" {
@@ -135,4 +114,33 @@ func Clone(ctx context.Context, opts CloneOptions) (Cloned, error) {
 	}
 
 	return res, nil
+}
+
+// setUp initializes a main clone that has just been put in place, by clone or convert: it writes
+// wt.yml with the IDE and the links, then runs Init.
+func (m Manager) setUp(ctx context.Context, ideName string, entries []links.Entry) (InitResult, error) {
+	// Before Init, which names the project only for JetBrains IDEs.
+	configCreated, err := config.Ensure(m.Layout.Container)
+	if err != nil {
+		return InitResult{}, fmt.Errorf("writing %s failed: %w", layout.ConfigFile, err)
+	}
+	if ideName != "" {
+		if err := config.SetIDE(m.Layout.Container, ideName); err != nil {
+			return InitResult{ConfigCreated: configCreated}, fmt.Errorf("writing %s failed: %w", layout.ConfigFile, err)
+		}
+	}
+
+	res, err := m.Init(ctx)
+	res.ConfigCreated = configCreated
+	if err != nil {
+		return res, fmt.Errorf("init failed: %w", err)
+	}
+
+	if _, err := links.AddToFile(m.Layout.Container, entries); err != nil {
+		return res, fmt.Errorf("writing %s failed: %w", layout.ConfigFile, err)
+	}
+
+	res.Links, err = links.Load(m.Layout.Container)
+
+	return res, err
 }

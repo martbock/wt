@@ -62,6 +62,53 @@ have to be recreated by hand.`,
 	return cmd
 }
 
+func newConvertCmd() *cobra.Command {
+	var ideName string
+	var linkPaths []string
+
+	cmd := &cobra.Command{
+		Use:   "convert [<directory>]",
+		Short: "Turn an existing clone into <directory>/main and set it up for worktrees",
+		Long: `Turn a directory with a clone directly in it into the wt layout, in place: the clone moves to
+<directory>/main and <directory> becomes the container, so the repository keeps its name and place.
+Nothing inside the clone changes. Uncommitted work, stashes and gitignored files such as local
+config come along. Then it does what 'wt init' does: write wt.yml, name the IDE project and install
+the pre-commit hook that refuses commits in main/.
+
+<directory> defaults to the current directory. Your shell stays at the old path, which is now the
+container; 'cd main' (or 'cd <directory>/main') to get back into the clone.
+
+wt expects main/ to stay on the default branch and clean. Convert does not change the branch or
+discard anything, but it tells you when the clone is not like that.
+
+A clone with linked worktrees is refused, because they would lose track of it: remove them first.
+--link and --ide work as they do for 'wt clone'.`,
+		Example: `  wt convert ~/git/acme/api
+  cd ~/git/acme/api && wt convert --link .env --link 'config/local*.yaml'`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			opts := manager.ConvertOptions{Dir: ".", Links: linkPaths, IDE: ideName}
+			if len(args) == 1 {
+				opts.Dir = expandHome(args[0])
+			}
+
+			inside := containsCwd(opts.Dir)
+
+			res, err := manager.Convert(cmd.Context(), opts)
+			if res.Layout.Main != "" {
+				renderConverted(cmd.OutOrStdout(), res, inside)
+			}
+
+			return err
+		},
+	}
+
+	cmd.Flags().StringArrayVar(&linkPaths, "link", nil, "path in main/ to symlink into every worktree (repeatable; default: none)")
+	cmd.Flags().StringVar(&ideName, "ide", "", "IDE for this repository: "+strings.Join(ide.Names(), ", ")+", or a macOS app name (default: $"+ide.AppEnv+", the global IDE or goland)")
+
+	return cmd
+}
+
 func newInitCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "init",
@@ -337,6 +384,30 @@ func execClaude(path, repo, slug string, resume bool, extra []string) error {
 	}
 
 	return syscall.Exec(bin, argv, os.Environ())
+}
+
+// containsCwd reports whether the working directory is dir or inside it.
+func containsCwd(dir string) bool {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return false
+	}
+
+	// Compare real paths: $PWD and the argument may differ by symlinks (macOS /tmp, /var).
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return false
+	}
+	if real, err := filepath.EvalSymlinks(abs); err == nil {
+		abs = real
+	}
+	if real, err := filepath.EvalSymlinks(cwd); err == nil {
+		cwd = real
+	}
+
+	rel, err := filepath.Rel(abs, cwd)
+
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 func expandHome(path string) string {

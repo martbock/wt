@@ -22,6 +22,7 @@ description: Create, list, open or remove git worktrees, each with its own branc
 
 | Goal | Command |
 | --- | --- |
+| Turn an existing clone (repo directly in the directory) into the wt layout, in place | `wt convert <directory>` (`--link`, `--ide` as for `wt clone`) |
 | New worktree and branch | `wt new fix-login-bug` |
 | ...with a ticket or type prefix on the branch | `wt new login-bug --prefix PROJ-1234` / `--prefix fix/` |
 | Worktree for an existing branch (review a PR) | `wt new --branch feat/login` (slug is derived; or `wt new review-1234 --branch feat/login`) |
@@ -42,6 +43,10 @@ output (`existing`, `tracking origin/...` or `new`). `--branch` and `--prefix` c
 
 The slug is short kebab-case (`fix-login-bug`), taken from the task. It becomes the directory
 name, the IDE project name suffix and the Claude session name.
+
+`wt convert` moves the clone to `<directory>/main`, so a shell that was inside it must `cd main`.
+It refuses a clone that has linked worktrees; do not remove them to get around that unless the user
+says so.
 
 ## Which worktrees are finished
 

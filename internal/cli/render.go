@@ -39,6 +39,26 @@ func renderInit(w io.Writer, l layout.Layout, res manager.InitResult, seeded []l
 	renderActions(w, "seeded", seeded, links.Copied, links.Present, links.Missing)
 }
 
+// renderConverted reports a converted clone. inside says the user's shell was in the clone, which
+// has moved to main/.
+func renderConverted(w io.Writer, c manager.Converted, inside bool) {
+	renderInit(w, c.Layout, c.Init, nil)
+
+	switch {
+	case c.Branch == "":
+		fmt.Fprintln(w, "  Note: main/ has a detached HEAD; wt expects it on the default branch.")
+	case c.DefaultBranch != "" && c.Branch != c.DefaultBranch:
+		fmt.Fprintf(w, "  Note: main/ is on %s, not %s; wt expects it on the default branch.\n", c.Branch, c.DefaultBranch)
+	}
+	if c.Dirty {
+		fmt.Fprintln(w, "  Note: main/ has uncommitted changes; wt expects it to stay clean, so move them to a worktree.")
+	}
+
+	if inside {
+		fmt.Fprintf(w, "\nYour shell is still at the old path. Run: cd %s\n", c.Layout.Main)
+	}
+}
+
 func renderEntries(w io.Writer, entries []links.Entry) {
 	if len(entries) == 0 {
 		return

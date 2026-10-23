@@ -29,6 +29,7 @@ type Backend interface {
 	PullRequests(ctx context.Context, infos []manager.Info) manager.PRs
 	Create(ctx context.Context, opts manager.CreateOptions) (manager.Created, error)
 	Remove(ctx context.Context, slug string, opts manager.RemoveOptions) (manager.Removed, error)
+	Purge(ctx context.Context, slugs []string) []manager.Purged
 	Links() ([]manager.LinkInfo, error)
 	AddLinks(ctx context.Context, paths []string) (manager.LinkChange, error)
 	RemoveLinks(ctx context.Context, paths []string) (manager.LinkChange, error)
@@ -77,6 +78,7 @@ const (
 	modeList mode = iota
 	modeNew
 	modeConfirmRemove
+	modeConfirmPurge
 	modeLinks
 	modeLinkAdd
 	modeConfirmUnlink
@@ -95,6 +97,9 @@ type (
 		slug string
 		res  manager.Removed
 		err  error
+	}
+	purgedMsg struct {
+		results []manager.Purged
 	}
 	prsMsg struct {
 		prs manager.PRs
@@ -146,9 +151,11 @@ type model struct {
 	input   textinput.Model
 	formErr string
 
-	// pending is the worktree or linked path that a confirmation is about.
-	pending     manager.Info
-	pendingLink string
+	// pending is the worktree or linked path that a confirmation is about, pendingPurge the
+	// worktrees a purge will remove.
+	pending      manager.Info
+	pendingLink  string
+	pendingPurge []string
 
 	// selectSlug moves the cursor to this worktree once the list has reloaded.
 	selectSlug string
@@ -196,7 +203,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
-		return m, nil
+		// The renderer repaints the lines of the frame but not the rows below it, so what the
+		// terminal left there when it resized would stay.
+		return m, tea.ClearScreen
 
 	case loadedMsg:
 		m = m.onLoaded(msg)
@@ -239,6 +248,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		default:
 			m.ok("Removed %s", msg.slug)
 		}
+
+		return m, m.load()
+
+	case purgedMsg:
+		m.busy = ""
+		m = m.onPurged(msg)
 
 		return m, m.load()
 
@@ -336,6 +351,8 @@ func (m model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.onLinkAddKey(msg)
 	case modeConfirmRemove:
 		return m.onConfirmRemoveKey(msg)
+	case modeConfirmPurge:
+		return m.onConfirmPurgeKey(msg)
 	case modeConfirmUnlink:
 		return m.onConfirmUnlinkKey(msg)
 	case modeLinks:
@@ -389,9 +406,76 @@ func (m model) onListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.mode = modeConfirmRemove
 			m.status = ""
 		}
+	case "p":
+		return m.startPurge()
 	}
 
 	return m, nil
+}
+
+// startPurge asks before removing the clean worktrees with a merged pull request, as listed.
+func (m model) startPurge() (tea.Model, tea.Cmd) {
+	m.status = ""
+
+	switch {
+	case m.prLoading || !m.prs.Looked:
+		m.fail(errors.New("still checking pull requests, try again in a moment"))
+		return m, nil
+	case m.prs.Err != nil:
+		m.fail(fmt.Errorf("cannot purge without pull requests: %w", m.prs.Err))
+		return m, nil
+	}
+
+	candidates := manager.PurgeCandidates(m.infos, m.prs)
+	if len(candidates) == 0 {
+		m.ok("Nothing to purge: no clean worktree has a merged pull request")
+		return m, nil
+	}
+
+	m.pendingPurge = make([]string, len(candidates))
+	for i, c := range candidates {
+		m.pendingPurge[i] = c.Slug
+	}
+	m.mode = modeConfirmPurge
+
+	return m, nil
+}
+
+func (m model) onConfirmPurgeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	m.mode = modeList
+	if msg.String() != "y" {
+		m.status = "Canceled"
+		return m, nil
+	}
+
+	slugs := m.pendingPurge
+	m.busy = "Purging " + plural(len(slugs), "worktree") + " (fetching origin first)…"
+
+	return m, func() tea.Msg {
+		return purgedMsg{results: m.be.Purge(m.ctx, slugs)}
+	}
+}
+
+func (m model) onPurged(msg purgedMsg) model {
+	var removed []string
+	var failures []string
+
+	for _, r := range msg.results {
+		if r.Err != nil {
+			failures = append(failures, fmt.Sprintf("%s: %v", r.Slug, r.Err))
+		} else {
+			removed = append(removed, r.Slug)
+		}
+	}
+
+	switch {
+	case len(failures) > 0:
+		m.fail(fmt.Errorf("purged %d, failed: %s", len(removed), strings.Join(failures, "; ")))
+	default:
+		m.ok("Purged %s: %s", plural(len(removed), "worktree"), strings.Join(removed, ", "))
+	}
+
+	return m
 }
 
 // guardPresent reports whether the worktree directory exists, and says so if it does not.

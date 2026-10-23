@@ -212,13 +212,17 @@ func (m model) viewFooter() string {
 		b.WriteString("\n" + dimStyle.Render("enter add · esc cancel"))
 	case modeConfirmRemove:
 		b.WriteString(m.removeQuestion())
+	case modeConfirmPurge:
+		b.WriteString(warnStyle.Render(fmt.Sprintf("Remove %s with a merged pull request? Their branches are deleted too.", plural(len(m.pendingPurge), "clean worktree"))) +
+			"  " + dimStyle.Render("y confirm · any other key cancels") + "\n" +
+			dimStyle.Render(strings.Join(m.pendingPurge, ", ")))
 	case modeConfirmUnlink:
 		b.WriteString(warnStyle.Render(fmt.Sprintf("Stop sharing %s? Its links are removed from every worktree; the files in main/ stay.", m.pendingLink)) +
 			"  " + dimStyle.Render("y confirm · any other key cancels"))
 	case modeLinks:
 		b.WriteString(dimStyle.Render("↑/↓ move · a add · d remove · s sync into every worktree · r refresh · esc back"))
 	default:
-		b.WriteString(dimStyle.Render("↑/↓ move · enter session · c continue · o open · n new · d remove · l files · r refresh · q quit"))
+		b.WriteString(dimStyle.Render("↑/↓ move · enter session · c continue · o open · n new · d remove · p purge merged · l files · r refresh · q quit"))
 	}
 
 	return b.String()

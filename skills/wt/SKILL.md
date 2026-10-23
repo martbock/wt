@@ -35,6 +35,7 @@ description: Create, list, open or remove git worktrees, each with its own branc
 | Stop sharing it | `wt link rm .env` |
 | Link what the `links` in `wt.yml` list into existing worktrees | `wt link sync` |
 | Remove it (and its branch, if no commits are lost) | `wt rm <slug>` |
+| Remove all finished worktrees (clean, merged PR) and their branches | `wt purge` (`-n` to preview) |
 
 `--prefix` only changes the branch name (`fix/login-bug`), not the directory. `--branch` checks out
 a local branch, tracks one from `origin` after a fetch, or creates it from the base if it exists
@@ -52,7 +53,9 @@ says so.
 
 `wt ls` shows each worktree's PR and a MERGED column. `yes` means its work is in the default
 branch (or its PR is merged), so `wt rm` is safe; `remote gone` usually means a squash-merged PR.
-Only clean up worktrees the user asked about, and never with `--force` unless asked.
+Only clean up worktrees the user asked about, and never with `--force` unless asked. `wt purge`
+removes every clean worktree whose PR is merged; run `wt purge -n` first and show the user the
+list unless they asked for the purge outright.
 
 ## Shared files and the IDE
 

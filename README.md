@@ -72,6 +72,7 @@ wt ui                          # interactive mode, see below
 wt ls                          # slug, branch, commits ahead, dirty?, merged?
 wt ls --pr                     # ... and each branch's pull request (asks GitHub, slower)
 wt rm fix-login-bug            # remove; also deletes the branch if no commits are lost
+wt purge                       # remove every clean worktree whose pull request is merged
 ```
 
 `wt new` takes a slug and accepts `--prefix`, `--branch`, `--base <ref>`, `--no-fetch` and
@@ -91,6 +92,12 @@ wt rm fix-login-bug            # remove; also deletes the branch if no commits a
 always removes the worktree, but deletes the branch only when that loses nothing: the branch has
 no commits beyond `origin/main`, or its remote branch is gone (a merged PR whose branch was
 deleted, which also covers squash merges). Otherwise it keeps the branch and says why.
+
+`wt purge` cleans up what is finished: it removes each worktree that has no uncommitted or
+untracked changes and whose branch is exactly at the tip of a merged pull request (looked up with
+`gh`), together with the branch. Worktrees with changes, with commits made after the merge, or
+without a merged pull request stay. If the lookup fails, nothing is removed. `wt purge -n` lists
+what it would remove.
 
 ## Pull request and merge status
 
@@ -129,6 +136,7 @@ pull request and merge status (the pull requests load in the background).
 | `o` | open it in the repository's IDE |
 | `n` | new worktree: type `[slug] [--prefix P] [--branch B]`, e.g. `login-bug --prefix fix/` or just `spike` |
 | `d` | remove it, after a yes/no; a dirty worktree asks explicitly before discarding changes |
+| `p` | purge: remove every clean worktree with a merged pull request, after a yes/no that lists them |
 | `l` | shared files: `a` add, `d` remove, `s` sync into every worktree |
 | `r` / `q` | refresh / quit |
 

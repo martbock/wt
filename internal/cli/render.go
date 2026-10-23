@@ -223,3 +223,45 @@ func renderRemoved(w io.Writer, res manager.Removed) {
 		fmt.Fprintf(w, "Kept branch %s: %s\n", res.Branch, strings.TrimSpace(res.BranchKept))
 	}
 }
+
+func renderPurgePlan(w io.Writer, candidates []manager.Info) {
+	if len(candidates) == 0 {
+		fmt.Fprintln(w, "Nothing to purge: no clean worktree has a merged pull request.")
+		return
+	}
+
+	fmt.Fprintf(w, "Would remove %d:\n", len(candidates))
+	for _, c := range candidates {
+		fmt.Fprintf(w, "  %s (%s)\n", c.Slug, c.Branch)
+	}
+}
+
+// renderPurged reports what Purge did. It returns an error when a worktree could not be removed,
+// so the exit status says so.
+func renderPurged(w io.Writer, results []manager.Purged) error {
+	if len(results) == 0 {
+		fmt.Fprintln(w, "Nothing to purge: no clean worktree has a merged pull request.")
+		return nil
+	}
+
+	var failed int
+	for _, r := range results {
+		switch {
+		case r.Err != nil:
+			failed++
+			fmt.Fprintf(w, "Failed %s: %v\n", r.Slug, r.Err)
+		case r.Removed.BranchDeleted:
+			fmt.Fprintf(w, "Removed %s and deleted branch %s\n", r.Slug, r.Removed.Branch)
+		case r.Removed.BranchKept != "":
+			fmt.Fprintf(w, "Removed %s, kept branch %s: %s\n", r.Slug, r.Removed.Branch, strings.TrimSpace(r.Removed.BranchKept))
+		default:
+			fmt.Fprintf(w, "Removed %s\n", r.Slug)
+		}
+	}
+
+	if failed > 0 {
+		return fmt.Errorf("%d of %d worktrees could not be removed", failed, len(results))
+	}
+
+	return nil
+}

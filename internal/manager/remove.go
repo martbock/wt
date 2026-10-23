@@ -15,6 +15,10 @@ type RemoveOptions struct {
 
 	// SkipFetch skips the fetch that lets Remove see branches deleted on the remote.
 	SkipFetch bool
+
+	// BranchMerged says the caller checked that the branch is the head of a merged pull request,
+	// so deleting it loses nothing, whether or not its remote branch is gone.
+	BranchMerged bool
 }
 
 // Removed reports what Remove did.
@@ -63,7 +67,10 @@ func (m Manager) Remove(ctx context.Context, slug string, opts RemoveOptions) (R
 		return res, nil
 	}
 
-	safe, reason := m.branchDisposable(ctx, info.Branch)
+	safe, reason := true, ""
+	if !opts.BranchMerged {
+		safe, reason = m.branchDisposable(ctx, info.Branch)
+	}
 	if !safe {
 		res.BranchKept = reason
 		return res, nil

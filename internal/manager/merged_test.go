@@ -1,6 +1,7 @@
 package manager_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -137,4 +138,69 @@ func TestRemove_StillKeepsUnmergedBranchAfterRefactor(t *testing.T) {
 	assert.True(t, res.BranchDeleted, "a deleted remote branch still frees the local one")
 	_, err = os.Stat(created.Path)
 	assert.True(t, os.IsNotExist(err))
+}
+
+func TestPurgeCandidates(t *testing.T) {
+	merged := func(sha string) manager.PullRequest {
+		return manager.PullRequest{State: manager.PRMerged, HeadSHA: sha}
+	}
+	wt := func(slug, head string) manager.Info {
+		return manager.Info{Slug: slug, Branch: slug, Head: head, Ahead: 1}
+	}
+
+	dirty := wt("dirty", "d")
+	dirty.Dirty = true
+	missing := wt("missing", "m")
+	missing.Missing = true
+	detached := wt("detached", "t")
+	detached.Branch = ""
+	fresh := manager.Info{Slug: "fresh", Branch: "fresh", Head: "origin-main"}
+
+	infos := []manager.Info{wt("done", "a"), dirty, missing, detached, wt("moved", "new"), wt("open", "o"), wt("none", "n"), fresh}
+	prs := manager.PRs{Looked: true, BySlug: map[string]manager.PullRequest{
+		"done":     merged("a"),
+		"dirty":    merged("d"),
+		"missing":  merged("m"),
+		"detached": merged("t"),
+		"moved":    merged("old"),
+		"open":     {State: manager.PROpen, HeadSHA: "o"},
+		"fresh":    merged("an-old-pr-with-the-same-branch-name"),
+	}}
+
+	got := manager.PurgeCandidates(infos, prs)
+
+	require.Len(t, got, 1)
+	assert.Equal(t, "done", got[0].Slug)
+}
+
+func TestPurgeCandidates_NothingWithoutALookup(t *testing.T) {
+	infos := []manager.Info{{Slug: "a", Branch: "a", Head: "x"}}
+	by := map[string]manager.PullRequest{"a": {State: manager.PRMerged, HeadSHA: "x"}}
+
+	assert.Empty(t, manager.PurgeCandidates(infos, manager.PRs{BySlug: by}), "not looked up")
+	assert.Empty(t, manager.PurgeCandidates(infos, manager.PRs{Looked: true, Err: errors.New("offline"), BySlug: by}))
+}
+
+func TestPurge_RemovesWorktreesAndTheirBranches(t *testing.T) {
+	m := setup(t)
+	squashed, err := m.Create(t.Context(), manager.CreateOptions{Slug: "squashed", SkipFetch: true})
+	require.NoError(t, err)
+	commitFile(t, squashed.Path, "s.txt", "s")
+	// Pushed, but the remote branch stays: a plain Remove keeps the local branch.
+	git(t, squashed.Path, "push", "-q", "-u", "origin", "squashed")
+
+	dirty, err := m.Create(t.Context(), manager.CreateOptions{Slug: "dirty", SkipFetch: true})
+	require.NoError(t, err)
+	write(t, filepath.Join(dirty.Path, "wip.txt"), "wip")
+
+	res := m.Purge(t.Context(), []string{"squashed", "dirty"})
+
+	require.Len(t, res, 2)
+	require.NoError(t, res[0].Err)
+	assert.True(t, res[0].Removed.BranchDeleted)
+	assert.NoDirExists(t, squashed.Path)
+	assert.Empty(t, git(t, m.Layout.Main, "branch", "--list", "squashed"))
+
+	require.ErrorIs(t, res[1].Err, manager.ErrDirty, "a worktree that got dirty is left alone")
+	assert.DirExists(t, dirty.Path)
 }

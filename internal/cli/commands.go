@@ -267,6 +267,58 @@ func newRemoveCmd() *cobra.Command {
 	return cmd
 }
 
+func newPurgeCmd() *cobra.Command {
+	var dryRun bool
+
+	cmd := &cobra.Command{
+		Use:   "purge",
+		Short: "Remove every clean worktree whose pull request is merged, and its branch",
+		Long: `Remove the worktrees that are finished: no uncommitted or untracked changes, and the branch is
+exactly at the tip of a merged pull request, looked up with the GitHub CLI. Their branches are
+deleted too, since the merged pull request has everything on them.
+
+A worktree is left alone when it has changes, when it has commits made after the merge, or when
+its branch has no merged pull request. Nothing is removed if the lookup fails (no 'gh', not logged
+in, offline).
+
+--dry-run lists what would be removed.`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			m, err := managerHere(cmd)
+			if err != nil {
+				return err
+			}
+
+			infos, err := m.List(cmd.Context())
+			if err != nil {
+				return err
+			}
+
+			prs := m.PullRequests(cmd.Context(), infos)
+			if prs.Err != nil {
+				return fmt.Errorf("cannot look up pull requests: %w", prs.Err)
+			}
+
+			candidates := manager.PurgeCandidates(infos, prs)
+			if dryRun {
+				renderPurgePlan(cmd.OutOrStdout(), candidates)
+				return nil
+			}
+
+			slugs := make([]string, len(candidates))
+			for i, c := range candidates {
+				slugs[i] = c.Slug
+			}
+
+			return renderPurged(cmd.OutOrStdout(), m.Purge(cmd.Context(), slugs))
+		},
+	}
+
+	cmd.Flags().BoolVarP(&dryRun, "dry-run", "n", false, "list what would be removed, remove nothing")
+
+	return cmd
+}
+
 func newPathCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:               "path <slug>",

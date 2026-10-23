@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -706,4 +707,26 @@ func TestPurge_FailureIsShown(t *testing.T) {
 	h.press("p", "y")
 
 	assert.Contains(t, h.view(), "purged 0, failed: done: boom; done2: boom")
+}
+
+func TestStatus_LongMessageWrapsInsteadOfBeingCutOff(t *testing.T) {
+	h := newHarness(t, alpha)
+	h.m, _ = h.m.Update(tea.WindowSizeMsg{Width: 60, Height: 30})
+
+	m := h.model()
+	m.fail(errors.New("git worktree remove /Users/me/git/acme/repo/worktrees/some-long-slug: fatal: working trees containing submodules cannot be moved or removed"))
+	h.m = m
+	out := h.view()
+
+	assert.Contains(t, out, "be moved or removed", "the end of the message is visible")
+	for _, line := range strings.Split(out, "\n") {
+		assert.LessOrEqual(t, lipgloss.Width(line), 60)
+	}
+
+	m.fail(errors.New(strings.Repeat("word ", 200)))
+	h.m = m
+	out = h.view()
+
+	assert.Contains(t, out, "…", "an excessive message is cut with an ellipsis")
+	assert.LessOrEqual(t, strings.Count(out, "\n")+1, 30)
 }

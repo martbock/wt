@@ -204,3 +204,41 @@ func TestPurge_RemovesWorktreesAndTheirBranches(t *testing.T) {
 	require.ErrorIs(t, res[1].Err, manager.ErrDirty, "a worktree that got dirty is left alone")
 	assert.DirExists(t, dirty.Path)
 }
+
+func TestRemove_WorktreeWithSubmodule(t *testing.T) {
+	m := setup(t)
+	sub := filepath.Join(t.TempDir(), "sub.git")
+	git(t, filepath.Dir(sub), "init", "-q", "-b", "main", sub)
+	git(t, sub, "commit", "-q", "--allow-empty", "-m", "sub")
+
+	created, err := m.Create(t.Context(), manager.CreateOptions{Slug: "with-sub", SkipFetch: true})
+	require.NoError(t, err)
+	git(t, created.Path, "-c", "protocol.file.allow=always", "submodule", "add", "-q", sub, "vendor/sub")
+	git(t, created.Path, "commit", "-q", "-m", "add submodule")
+	git(t, created.Path, "push", "-q", "-u", "origin", "with-sub")
+	git(t, m.Layout.Main, "push", "-q", "origin", "--delete", "with-sub")
+
+	res, err := m.Remove(t.Context(), "with-sub", manager.RemoveOptions{})
+
+	require.NoError(t, err)
+	assert.True(t, res.BranchDeleted)
+	assert.NoDirExists(t, created.Path)
+}
+
+func TestRemove_DirtySubmoduleIsStillRefused(t *testing.T) {
+	m := setup(t)
+	sub := filepath.Join(t.TempDir(), "sub.git")
+	git(t, filepath.Dir(sub), "init", "-q", "-b", "main", sub)
+	git(t, sub, "commit", "-q", "--allow-empty", "-m", "sub")
+
+	created, err := m.Create(t.Context(), manager.CreateOptions{Slug: "dirty-sub", SkipFetch: true})
+	require.NoError(t, err)
+	git(t, created.Path, "-c", "protocol.file.allow=always", "submodule", "add", "-q", sub, "vendor/sub")
+	git(t, created.Path, "commit", "-q", "-m", "add submodule")
+	write(t, filepath.Join(created.Path, "vendor", "sub", "wip.txt"), "wip")
+
+	_, err = m.Remove(t.Context(), "dirty-sub", manager.RemoveOptions{})
+
+	require.ErrorIs(t, err, manager.ErrDirty)
+	assert.DirExists(t, created.Path)
+}

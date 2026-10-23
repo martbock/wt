@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/martbock/wt/internal/gitx"
 )
@@ -54,8 +56,10 @@ func (m Manager) Remove(ctx context.Context, slug string, opts RemoveOptions) (R
 		_ = m.Fetch(ctx)
 	}
 
+	// Git refuses to remove a worktree with submodules without --force, even a clean one. It is
+	// clean here (the check above covers submodules), so that loses nothing.
 	args := []string{"worktree", "remove"}
-	if opts.Force || info.Missing {
+	if opts.Force || info.Missing || hasSubmodules(info.Path) {
 		args = append(args, "--force")
 	}
 	if _, err := gitx.Run(ctx, m.Layout.Main, append(args, info.Path)...); err != nil {
@@ -83,6 +87,12 @@ func (m Manager) Remove(ctx context.Context, slug string, opts RemoveOptions) (R
 	res.BranchDeleted = true
 
 	return res, nil
+}
+
+// hasSubmodules reports whether the checkout at path declares submodules.
+func hasSubmodules(path string) bool {
+	_, err := os.Stat(filepath.Join(path, ".gitmodules"))
+	return err == nil
 }
 
 func (m Manager) branchDisposable(ctx context.Context, branch string) (bool, string) {

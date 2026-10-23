@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/martbock/wt/internal/manager"
 )
@@ -194,9 +195,9 @@ func (m model) viewFooter() string {
 		b.WriteString(warnStyle.Render(m.busy))
 		return b.String()
 	case m.status != "" && m.statusErr:
-		b.WriteString(errStyle.Render(m.status) + "\n")
+		b.WriteString(errStyle.Render(m.wrapStatus()) + "\n")
 	case m.status != "":
-		b.WriteString(okStyle.Render(m.status) + "\n")
+		b.WriteString(okStyle.Render(m.wrapStatus()) + "\n")
 	default:
 		b.WriteString("\n")
 	}
@@ -226,6 +227,28 @@ func (m model) viewFooter() string {
 	}
 
 	return b.String()
+}
+
+// maxStatusLines bounds how much of the screen a long status message may take.
+const maxStatusLines = 4
+
+// wrapStatus wraps the status message to the window width, so a long error is not cut off at the
+// edge, and ends it with an ellipsis if it needs more than maxStatusLines lines.
+func (m model) wrapStatus() string {
+	if m.width <= 0 {
+		return m.status
+	}
+
+	lines := strings.Split(ansi.Wrap(m.status, m.width, ""), "\n")
+	if len(lines) <= maxStatusLines {
+		return strings.Join(lines, "\n")
+	}
+
+	lines = lines[:maxStatusLines]
+	last := lines[maxStatusLines-1]
+	lines[maxStatusLines-1] = ansi.Truncate(last, m.width-1, "") + "…"
+
+	return strings.Join(lines, "\n")
 }
 
 func (m model) formErrLine() string {
